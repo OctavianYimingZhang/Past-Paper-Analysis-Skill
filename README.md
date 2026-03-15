@@ -1,16 +1,10 @@
 # Past Paper Knowledge Point Analysis
 
-`past-paper-knowledge-point-analysis` is an open-source Codex skill for converting lecture materials and past papers into an exam-facing knowledge-point map. Instead of treating a course as a loose collection of slides, notes, and old questions, the skill turns those inputs into a structured view of what the course actually tests, how often it tests it, and how consistently specific topics recur across formal paper years.
+`past-paper-knowledge-point-analysis` is an open-source Codex skill that turns lecture materials and past papers into an exam-oriented knowledge-point map. Instead of treating a course as a loose set of slides, notes, and old questions, the skill gives Codex a structured way to identify what the course actually tests, how often it tests it, and how reliably specific topics return across formal paper years.
 
-In practice, the skill gives Codex a repeatable way to move from raw teaching material to revision priorities. Codex extracts lecture structure, proposes knowledge points, maps each question to one primary point, and then computes two separate signals: how often a point is tested and how reliably it returns across years. The result is a clearer study model than either raw slides or raw past papers can provide on their own.
+In practice, the skill is built for a study workflow where a user has lecture slides or lecture-note PDFs, one or more past papers, and optionally answer keys. Codex uses those materials to reconstruct lecture structure, divide the course into optimized knowledge points, map each question to one primary point, and then compute hotness and retention from that stable mapping. The result is a more actionable revision model than either raw slides or raw papers can provide on their own.
 
-The skill is designed for workflows built around:
-
-- lecture slides or reorganized lecture notes
-- past papers
-- optional answer keys
-
-It produces:
+The skill produces:
 
 - lecture-to-topic maps
 - one primary knowledge point per question
@@ -64,45 +58,48 @@ Retention bands are intentionally simple:
 
 ## Workflow
 
-The full Codex-centered workflow is documented in [docs/workflow.md](./docs/workflow.md).
+After the skill is invoked, Codex does not jump straight to counting. It follows a staged analysis loop that turns raw course materials into a stable question-to-topic model.
 
-At a high level, Codex:
+1. **Codex inspects the course spec and available sources.** Codex first checks whether the run has slide decks, note PDFs, papers, and answer keys, and decides what evidence is strong enough to trust.
+2. **Codex chooses slide-first or notes-first extraction.** If a known preset exists and usable slide decks are available, Codex prefers slide extraction. If slides are missing, incomplete, or weak, Codex falls back to note-PDF extraction and may use OCR when needed.
+3. **Codex segments the lecture material.** Codex reconstructs lecture boundaries so later knowledge points can still be traced back to real course structure instead of being treated as isolated text fragments.
+4. **Codex divides each lecture into candidate knowledge points.** This is the first explicit “split the lecture into knowledge points” step. Codex looks for lines or fragments that behave like examinable units rather than boilerplate.
+5. **Codex validates and segments the paper questions.** Depending on the paper format, Codex parses standard MCQ numbering, grouped/shared-context questions, explicit `question_numbers` sequences, and auxiliary papers such as revision tests. This is a validation step, not just preprocessing: if question segmentation is weak, later mapping becomes unstable.
+6. **Codex uses answer keys, when available, to validate or recover question blocks.** Codex extracts embedded images from DOCX files, OCRs them, parses answer and explanation blocks, and uses that evidence to confirm question structure, strengthen topic mapping, or recover placeholder question records when paper OCR is weak.
+7. **Codex optimizes knowledge-point separation.** Codex normalizes, merges, and refines candidate lines into optimized knowledge points. This is the explicit “optimize knowledge-point boundaries” step. The goal is to avoid splitting one topic too finely or merging multiple distinct topics into one vague bucket.
+8. **Codex assigns one primary knowledge point per question.** Secondary or supporting points may still be recorded, but only the primary point drives the statistics. This preserves stable counting.
+9. **Codex computes hotness.** Hotness measures how often a knowledge point is tested, how much of the question set it occupies, and how it ranks relative to other tested topics.
+10. **Codex computes retention.** Retention measures how consistently a knowledge point reappears across formal paper years, and whether it crosses the 50% or 75% recurrence boundaries.
+11. **Codex records uncertainty when the evidence is weak.** If OCR confidence is low, question numbering is irregular, or lecture/topic mapping is weak, Codex emits review items instead of pretending the result is clean.
+12. **Codex exports the final analysis package.** The final outputs are a workbook, a JSON payload, and a Markdown summary built from the same primary-point mapping.
 
-1. inspects the course spec and available sources
-2. extracts lecture structure from slides or notes
-3. derives and optimizes knowledge points
-4. validates and segments paper questions
-5. uses answer keys when available to strengthen or recover mappings
-6. assigns one primary knowledge point per question
-7. computes hotness and retention separately
-8. exports workbook, JSON, Markdown, and review queue outputs
+In short, Codex uses the skill to divide lecture material into knowledge points, validate and segment questions, optimize where those knowledge-point boundaries should sit, and then compute hotness plus retention from one stable question-to-point assignment.
 
 ## Use Cases
 
-Examples are documented in [docs/use-cases.md](./docs/use-cases.md).
-
 Typical use cases:
 
-- Known course with a preset and a slide deck
-- Unknown course with only note PDFs and papers
-- Formal papers plus auxiliary revision tests
-- Partial answer-key coverage
+- **Known course with a preset and a slide deck.** Codex uses the preset-backed defaults to recover lecture structure and paper parsing more reliably.
+- **Unknown course with only note PDFs and papers.** Codex falls back to generic extraction and relies more heavily on review gating because the lecture structure is weaker.
+- **Slides plus papers, without answer keys.** The skill still runs, but Codex must rely more on lecture content and question stems, so uncertainty is higher.
+- **Slides plus papers, with answer keys.** Answer-key OCR can validate paper segmentation and recover mappings when the paper itself is OCR-noisy or image-heavy.
+- **Formal papers plus auxiliary revision tests.** Codex can analyze both, but default retention still uses formal papers unless the spec says otherwise.
+- **Exam prioritization.** The output helps separate topics that are frequent, topics that are durable across years, and topics that are low-priority one-offs.
 
-## Repository Layout
+Hotness helps identify what is tested often. Retention helps identify what persists across years. They should be interpreted together, but they should not be collapsed into one score. Each question is still counted against one primary knowledge point only.
 
-- [SKILL.md](./SKILL.md): Codex skill instructions
-- [agents/openai.yaml](./agents/openai.yaml): skill UI metadata
-- [scripts/analyze_past_papers.py](./scripts/analyze_past_papers.py): main analyzer
-- [scripts/vision_ocr.swift](./scripts/vision_ocr.swift): macOS Vision OCR helper
-- [references/course-spec-schema.md](./references/course-spec-schema.md): public schema
-- [references/presets.md](./references/presets.md): preset overview
-- [references/specs/example-slides-and-papers.json](./references/specs/example-slides-and-papers.json): public example spec
-- [references/specs/example-notes-and-papers.json](./references/specs/example-notes-and-papers.json): public example spec
-- [tests/test_public_contract.py](./tests/test_public_contract.py): public tests
+## What To Download And Use
 
-## Install
+This repository is already shaped as a runnable skill package. The files that matter for running the skill in Codex CLI or the Codex App are:
 
-This repository is the public source-of-truth package. Use it directly or copy it into your local Codex skills directory.
+- `SKILL.md`
+- `agents/openai.yaml`
+- `scripts/analyze_past_papers.py`
+- `scripts/vision_ocr.swift`
+- `references/course-spec-schema.md`
+- `references/presets.md`
+- `references/specs/example-slides-and-papers.json`
+- `references/specs/example-notes-and-papers.json`
 
 Basic Python dependencies:
 
@@ -125,13 +122,3 @@ python3 scripts/analyze_past_papers.py --spec references/specs/example-slides-an
 ```
 
 Replace the example spec with your own local runnable spec that contains real file paths.
-
-## Public Tests
-
-Run:
-
-```bash
-python3 -m unittest tests/test_public_contract.py
-```
-
-These tests are public-safe and do not depend on private course materials.
