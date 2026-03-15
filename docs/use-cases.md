@@ -84,3 +84,4 @@ Use the outputs to prioritize revision:
 Hotness helps identify what is tested often.
 Retention helps identify what persists across years.
 They should be interpreted together, not merged into one score.
+Each question is still counted against one primary knowledge point only.

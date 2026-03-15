@@ -1,120 +1,152 @@
 # Workflow
 
-## 1. Resolve Inputs
+This document describes how Codex works after the `past-paper-knowledge-point-analysis` skill is invoked. The workflow is not just a generic pipeline; it is a sequence for turning lecture materials and papers into a stable knowledge-point model that can support hotness and retention analysis.
 
-The analyzer reads a course spec and decides which material sources are available:
+## 1. Codex inspects the course spec and available sources
+
+Codex first reads the course spec and determines which source types are available:
 
 - `slides_dir`
 - `notes_pdf`
 - `papers[]`
 - optional `answer_keys[]`
 
-At least one of `slides_dir` or `notes_pdf` must be present.
+At this point, Codex is deciding what evidence it can trust, what is missing, and whether the run should behave like a preset-backed analysis or a generic one.
 
-## 2. Choose Source Strategy
+## 2. Codex chooses the lecture source strategy
 
-The analyzer operates in two modes:
+Codex then chooses how to recover lecture structure.
 
-- **Preset-first mode** for known courses with curated defaults
-- **Generic mode** for unknown courses
+- If a known preset exists and a usable `slides_dir` is present, Codex prefers slide extraction.
+- If slide decks are missing, incomplete, or weak, Codex falls back to note-PDF extraction.
+- If note text extraction is weak, Codex may use OCR as a fallback.
 
-When a known preset is available and `slides_dir` exists, the analyzer prefers slide extraction first. If slides are unavailable or weak, it falls back to note-PDF extraction.
+This decision matters because the lecture source determines how well the later knowledge-point split reflects the actual teaching structure.
 
-## 3. Extract Lecture Structure
+## 3. Codex segments the lecture material
 
-### Preferred path
+Codex next turns the lecture material into lecture-level units.
 
-Use raw `.pptx` slide decks to infer:
+- With raw `.pptx` slide decks, Codex infers lecture order, lecture titles, and slide text directly.
+- With note PDFs, Codex detects lecture boundaries from note structure and heading patterns.
 
-- lecture order
-- lecture titles
-- candidate examinable statements
+The goal of this step is not yet to count topics. The goal is to recover the teaching structure well enough that each later knowledge point can still be traced back to a lecture context.
 
-### Fallback path
+## 4. Codex divides each lecture into candidate knowledge points
 
-Use lecture-note PDFs when slides are unavailable. If note text extraction is weak, the analyzer may fall back to OCR.
+Once the lecture structure is available, Codex scans the lecture content for candidate examinable statements. This is the first explicit “divide the lecture into knowledge points” step.
 
-## 4. Extract Initial Knowledge Points
+Codex looks for lines or fragments that behave like teachable units rather than boilerplate. It does not assume the lecture already contains clean topic labels. Instead, it proposes candidate knowledge points from the lecture material itself.
 
-The analyzer scans lecture content and pulls out candidate lines that look like examinable units.
+At this stage, the candidate set is intentionally broad. It is designed to capture the syllabus surface before question validation starts narrowing it.
 
-It filters boilerplate and then clusters overlapping candidates into optimized knowledge points.
+## 5. Codex validates paper questions and segments the paper
 
-## 5. Segment Paper Questions
+Codex then moves to the past papers and segments them into question blocks.
 
-The analyzer parses each paper using question markers and parser hints.
-
-Supported patterns include:
+Depending on the paper format, Codex may use:
 
 - standard MCQ numbering
-- grouped/shared-context questions
-- explicit `question_numbers` sequences for papers that skip printed numbers
-- auxiliary papers such as revision tests
+- grouped or shared-context question parsing
+- explicit `question_numbers` sequences when printed numbering is irregular
+- auxiliary-paper handling for revision tests or modified syllabus papers
 
-## 6. Optional Answer-Key OCR
+This is the first validation step. If Codex cannot reliably recover the question blocks, every later mapping becomes unstable, so paper segmentation quality is treated as a core dependency rather than a cosmetic preprocessing step.
 
-If answer keys are present:
+## 6. Codex uses answer keys to validate or recover question blocks
 
-- embedded images are extracted from the DOCX file
-- OCR is run over those images
-- answer and explanation blocks are parsed
+If answer keys are available, Codex extracts embedded images from the DOCX files and runs OCR over them. Codex then parses answer and explanation blocks.
 
-Answer-key OCR is used to:
+Codex uses answer keys for three purposes:
 
-- validate paper segmentation
-- improve topic mapping confidence
-- recover placeholder question records when the paper OCR is too weak
+- to validate that paper segmentation is consistent with the expected question sequence
+- to strengthen topic mapping with answer and explanation text
+- to recover placeholder question records when the paper OCR is too weak to segment a question directly
 
-## 7. Map Questions to Knowledge Points
+This means answer keys are optional, but when they exist they improve the reliability of both question validation and topic assignment.
 
-Each question is mapped to:
+## 7. Codex optimizes the knowledge-point split
 
-- one **primary lecture**
-- one **primary knowledge point**
-- optional **secondary points** for context only
+At this point Codex has:
 
-Only the primary point is counted in hotness and retention.
+- lecture-derived candidate knowledge points
+- question blocks from papers
+- optional answer/explanation evidence from answer keys
 
-## 8. Compute Statistics
+Codex then normalizes, merges, and refines the candidate set into optimized knowledge points. This is the explicit “optimize knowledge-point separation” step.
 
-### Hotness
+The purpose is to avoid two common failure modes:
 
-Hotness tracks how often a primary knowledge point is tested:
+- one topic being split too finely and fragmenting the counts
+- multiple distinct topics being merged into one vague label and blurring the statistics
 
-- raw hits
+Codex keeps the optimized set close enough to the lecture structure to remain explainable, but distinct enough to support stable counting.
+
+## 8. Codex assigns one primary knowledge point per question
+
+After the optimized point set is ready, Codex assigns each question to one primary knowledge point.
+
+Codex may also record secondary or supporting points for context, but only the primary point drives the statistics. This rule is critical because it prevents the same question from inflating multiple frequency and retention counts.
+
+This is the bridge between syllabus structure and exam behavior: every question becomes one counted vote for one optimized point.
+
+## 9. Codex computes hotness
+
+With the primary mappings in place, Codex computes hotness.
+
+Hotness answers:
+
+- How often is this topic tested?
+- How much of the question set does it occupy?
+- How does it rank relative to other tested topics?
+
+Typical hotness outputs include:
+
+- raw question hits
 - yearly counts
 - question-share percentage
 - rank
 
-### Retention
+## 10. Codex computes retention
 
-Retention is computed over `formal` papers only by default:
+Codex then computes retention separately from hotness.
 
-- years present
-- retention fraction
-- retention percent
-- `meets_50`
-- `meets_75`
-- retention band
+Retention answers:
 
-Auxiliary papers can be analyzed without changing default retention unless the spec explicitly chooses otherwise.
+- In how many formal paper years does this topic appear?
+- Does it cross the 50% recurrence boundary?
+- Does it cross the 75% recurrence boundary?
+- Is it an anchor topic, a core topic, a recurring topic, or a one-off topic?
 
-## 9. Emit Review Queue
+By default, Codex computes retention against `formal` papers only. Auxiliary papers can still be analyzed, but they do not silently redefine recurrence.
 
-The analyzer never hides weak cases. It records them in `Review_Queue`, including:
+## 11. Codex records uncertainty instead of hiding it
 
-- low OCR confidence
-- weak lecture/topic mapping
-- missing question numbers
+When Codex encounters weak or incomplete evidence, it does not quietly force a clean answer. Instead, it emits review items.
+
+Codex records uncertainty when it sees problems such as:
+
+- weak OCR confidence
+- weak lecture extraction
+- weak question segmentation
+- missing or irregular question numbering
+- weak lecture or knowledge-point mapping
 - answer-key parse failures
-- paper question undercounts
 
-## 10. Export Outputs
+This keeps the statistical outputs honest and makes the workflow easier to audit.
 
-The analyzer writes:
+## 12. Codex exports the final analysis package
+
+Finally, Codex exports three coordinated outputs:
 
 - Excel workbook
 - JSON analysis payload
 - Markdown summary
 
-All public-facing labels and generated summaries are kept in English.
+Together, these outputs give the user:
+
+- a readable revision summary
+- a machine-readable analysis artifact
+- a traceable review queue for anything that still needs human checking
+
+In short, after the skill is invoked, Codex follows a full analysis loop: it divides lecture material into knowledge points, validates and segments the paper, optimizes where knowledge-point boundaries should sit, maps each question to one primary point, and then computes exam frequency and retention from that stable mapping.

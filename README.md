@@ -1,14 +1,16 @@
 # Past Paper Knowledge Point Analysis
 
-`past-paper-knowledge-point-analysis` is an open-source Codex skill for turning course materials into exam-oriented topic maps.
+`past-paper-knowledge-point-analysis` is an open-source Codex skill for converting lecture materials and past papers into an exam-facing knowledge-point map. Instead of treating a course as a loose collection of slides, notes, and old questions, the skill turns those inputs into a structured view of what the course actually tests, how often it tests it, and how consistently specific topics recur across formal paper years.
 
-It is designed for the study workflow where a user has:
+In practice, the skill gives Codex a repeatable way to move from raw teaching material to revision priorities. Codex extracts lecture structure, proposes knowledge points, maps each question to one primary point, and then computes two separate signals: how often a point is tested and how reliably it returns across years. The result is a clearer study model than either raw slides or raw past papers can provide on their own.
+
+The skill is designed for workflows built around:
 
 - lecture slides or reorganized lecture notes
 - past papers
 - optional answer keys
 
-The skill analyzes those inputs and produces:
+It produces:
 
 - lecture-to-topic maps
 - one primary knowledge point per question
@@ -16,43 +18,30 @@ The skill analyzes those inputs and produces:
 - year-to-year retention bands
 - review queues for weak OCR, weak parsing, or weak mappings
 
-## What Problem It Solves
+## Why This Skill Exists
 
-Students often have two separate assets:
+Students usually have two useful but incomplete sources of truth.
 
-- lecture materials that define the syllabus
-- past papers that reveal what is repeatedly tested
+- Lecture materials describe the syllabus, but they do not say which ideas are repeatedly examined.
+- Past papers reveal repetition, but they do not explain how a question fits back into the course structure.
 
-This skill connects those assets. It helps answer questions such as:
+That gap matters. If a learner only reads slides, they often over-revise broad content without knowing which pieces are exam-active. If they only read past papers, they may see repeated question patterns without knowing how those patterns connect to lecture content. What is missing is a stable bridge between “what the course teaches” and “what the papers actually test.”
 
-- Which knowledge points are tested most often?
-- Which topics recur across formal paper years?
-- Which topics are one-off or auxiliary?
-- Which question mappings are uncertain and require review?
-
-## Minimum Input
-
-Minimum usable input:
-
-- `Lecture Slides + Past Papers`
-
-Preferred input:
-
-- `Lecture Slides + Past Papers + Answer Keys`
-
-Fallback input:
-
-- `Lecture Notes PDF + Past Papers`
+This skill is built to create that bridge. Codex divides lecture material into candidate knowledge points, validates paper questions against those points, optimizes where one knowledge point should be split from another, and then counts every question against one primary point. That one-question-one-primary-point rule is what makes the later statistics stable enough to act on. Without it, frequency counts become inflated, retention becomes ambiguous, and revision priorities become harder to justify.
 
 ## Core Design Rules
 
-- Count exactly **one primary knowledge point per question**.
-- Keep **hotness** and **retention** separate.
-- Use fixed retention bands instead of quartile-based retention stars.
-- Keep generated outputs in **English only**.
-- Surface weak cases in a **Review Queue** instead of hiding them.
+- Count exactly **one primary knowledge point per question**. The purpose of the mapping is to create stable statistics. If a single question is fully counted against multiple points, both frequency and retention are distorted. Secondary or supporting topics may still be recorded for context, but they do not drive the main counts.
+- Keep **hotness** and **retention** separate. Hotness answers “How often is this topic tested?” Retention answers “How consistently does this topic reappear across formal years?” Those are related but not interchangeable signals. Merging them into one score makes it harder to tell whether a topic is common, durable, or both.
+- Use fixed retention bands instead of quartile-based retention stars. Explicit thresholds create clearer revision decisions because they preserve meaningful boundaries such as 50% and 75%. Percentile buckets can be convenient summaries, but they often blur the difference between topics that are truly stable and topics that only appear stable relative to a noisy cohort.
+
+These rules are the statistical contract of the skill: every later summary assumes that the question mapping obeys them.
 
 ## Retention Model
+
+Retention is computed after Codex has assigned each question to one primary knowledge point. The numerator is the number of formal paper years in which that primary point appears at least once. The denominator is the number of formal paper years included in the course spec. By default, papers marked as `auxiliary` can still be analyzed for context, but they do not change the default recurrence baseline unless the spec explicitly chooses otherwise.
+
+This matters because recurrence should describe how a topic behaves in the official year-to-year paper sequence, not how often it appears in every revision test, mock, or modified syllabus paper. That is why the skill keeps formal-year retention separate from broader analysis context.
 
 Retention fields are explicit:
 
@@ -63,29 +52,30 @@ Retention fields are explicit:
 - `meets_75`
 - `retention_band`
 
-Retention bands:
+`years_present` is the exact count of formal years in which the primary knowledge point appears. `retention_fraction` and `retention_percent` make the numerator and denominator visible instead of hiding them inside a label. `meets_50` and `meets_75` exist because explicit thresholds are easier to use for revision decisions than quartile-style retention stars: a learner can immediately see whether a topic clears a meaningful recurrence boundary.
 
-- `Anchor`: at least 75%
-- `Core`: at least 50% and below 75%
-- `Recurring`: more than one formal year but below 50%
-- `One-off`: exactly one formal year
-- `Not tested`: zero mapped hits
+Retention bands are intentionally simple:
+
+- `Anchor`: the topic appears in at least 75% of formal years, so it behaves like a highly stable core topic.
+- `Core`: the topic appears in at least 50% but below 75% of formal years, so it recurs often enough to matter but is less stable than an anchor topic.
+- `Recurring`: the topic appears in more than one formal year, but not often enough to clear the core threshold.
+- `One-off`: the topic appears in exactly one formal year.
+- `Not tested`: the topic has no mapped hits in the analyzed formal years.
 
 ## Workflow
 
-High-level workflow:
+The full Codex-centered workflow is documented in [docs/workflow.md](./docs/workflow.md).
 
-1. Read the course spec.
-2. Prefer preset-backed slide extraction when a known preset exists.
-3. Fall back to note-PDF extraction when slides are missing or weak.
-4. Segment questions from papers.
-5. Optionally OCR answer keys to validate or recover question mappings.
-6. Merge candidate lines into optimized knowledge points.
-7. Map each question to one primary knowledge point.
-8. Compute hotness and retention statistics.
-9. Export workbook, JSON, Markdown, and review queue.
+At a high level, Codex:
 
-Detailed workflow documentation is in [docs/workflow.md](./docs/workflow.md).
+1. inspects the course spec and available sources
+2. extracts lecture structure from slides or notes
+3. derives and optimizes knowledge points
+4. validates and segments paper questions
+5. uses answer keys when available to strengthen or recover mappings
+6. assigns one primary knowledge point per question
+7. computes hotness and retention separately
+8. exports workbook, JSON, Markdown, and review queue outputs
 
 ## Use Cases
 
@@ -145,14 +135,3 @@ python3 -m unittest tests/test_public_contract.py
 ```
 
 These tests are public-safe and do not depend on private course materials.
-
-## Notes on Public vs Private Data
-
-This repository does **not** include:
-
-- private absolute file paths
-- private benchmark outputs
-- copyrighted course materials
-- local-only helper scripts for one personal environment
-
-You should create your own local runnable spec files outside this repository.

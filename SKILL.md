@@ -15,21 +15,7 @@ Use this skill to map lecture materials and past papers into:
 - fixed-threshold retention bands
 - review-gated outputs in English
 
-## Inputs
-
-Minimum input:
-
-- `slides_dir + papers[]`
-
-Preferred input:
-
-- `slides_dir + papers[] + answer_keys[]`
-
-Fallback input:
-
-- `notes_pdf + papers[]`
-
-At least one of `slides_dir` or `notes_pdf` is required.
+The skill is designed for course specs built from lecture slides or lecture-note PDFs, past papers, and optional answer keys.
 
 ## Public Specs
 
@@ -61,8 +47,6 @@ Replace the example spec with your own local spec containing real paths.
   - `One-off`
   - `Not tested`
 - Do not convert retention into quartile stars.
-- Keep generated outputs in English only.
-- Keep uncertain items in `Review_Queue`.
 
 ## Presets
 
