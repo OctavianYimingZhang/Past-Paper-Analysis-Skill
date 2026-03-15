@@ -1,0 +1,47 @@
+{
+  "course_id": "example-notes-course",
+  "course_name": "Example Notes Course",
+  "output_language": "en",
+  "notes_pdf": "/absolute/path/to/reorganized-notes.pdf",
+  "formal_years": [
+    "2017",
+    "2018",
+    "2022"
+  ],
+  "paper_skip_pages": 2,
+  "notes": {
+    "ocr_fallback_mode": "text_first",
+    "min_detected_lectures": 6,
+    "lecture_header_patterns": [
+      "Lecture\\s*(\\d{1,2})",
+      "\\bL(\\d{1,2})\\b"
+    ]
+  },
+  "papers": [
+    {
+      "year": "2017",
+      "role": "formal",
+      "pdf": "/absolute/path/to/2017-paper.pdf",
+      "expected_questions": 50
+    },
+    {
+      "year": "2018",
+      "role": "formal",
+      "pdf": "/absolute/path/to/2018-paper.pdf",
+      "expected_questions": 50
+    },
+    {
+      "year": "2022",
+      "role": "formal",
+      "pdf": "/absolute/path/to/2022-paper.pdf",
+      "expected_questions": 50
+    }
+  ],
+  "answer_keys": [
+    {
+      "year": "2022",
+      "docx": "/absolute/path/to/2022-answer-key.docx"
+    }
+  ],
+  "manual_overrides": {}
+}

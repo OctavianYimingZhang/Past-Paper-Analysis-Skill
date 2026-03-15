@@ -1,0 +1,31 @@
+{
+  "course_id": "example-slides-course",
+  "course_name": "Example Slides Course",
+  "preset_id": "biochemistry",
+  "output_language": "en",
+  "slides_dir": "/absolute/path/to/slide-decks",
+  "formal_years": [
+    "2021",
+    "2022"
+  ],
+  "paper_skip_pages": 2,
+  "parser_hints": {
+    "paper_strategy": "mcq_standard"
+  },
+  "papers": [
+    {
+      "year": "2021",
+      "role": "formal",
+      "pdf": "/absolute/path/to/2021-paper.pdf",
+      "expected_questions": 50
+    },
+    {
+      "year": "2022",
+      "role": "formal",
+      "pdf": "/absolute/path/to/2022-paper.pdf",
+      "expected_questions": 50
+    }
+  ],
+  "answer_keys": [],
+  "manual_overrides": {}
+}
